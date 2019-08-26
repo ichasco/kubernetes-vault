@@ -1,0 +1,18 @@
+{
+    "hosts": [
+      "cluster.local"
+    ],
+    "key": {
+      "algo": "rsa",
+      "size": 2048
+    },
+    "names": [
+      {
+        "C": "ES",
+        "ST": "Spain",
+        "L": "Madrid",
+        "O": "Kubernetes",
+        "OU": "CA"
+      }
+    ]
+  }

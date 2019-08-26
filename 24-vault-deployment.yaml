@@ -1,0 +1,188 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: vault
+  labels:
+    app: vault
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      containers:
+      - name: vault
+        command: ["vault", "server", "-config", "/vault/config/config.json"]
+        image: "vault:1.2.2"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          capabilities:
+            add:
+              - IPC_LOCK
+        env:
+          - name: TZ
+            value: "Europe/Madrid"
+        volumeMounts:
+          - name: vault-config
+            mountPath: /vault/config/config.json
+            subPath: config.json
+          - name: vault-tls
+            mountPath: /etc/tls
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+        ports:
+          - name: vault-port
+            containerPort: 8200 
+        livenessProbe:
+          exec:
+            command: ["pidof", "vault"]
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5          
+        readinessProbe:
+          tcpSocket:
+            port: vault-port
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      - name: consul-vault-agent
+        image: "consul:1.5.0"
+        env:
+          - name: GOSSIP_ENCRYPTION_KEY
+            valueFrom:
+              secretKeyRef:
+                name: consul
+                key: gossip-encryption-key
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        args:
+          - "agent"
+          - "-retry-join=consul-0.consul.$(NAMESPACE).svc.cluster.local"
+          - "-retry-join=consul-1.consul.$(NAMESPACE).svc.cluster.local"
+          - "-retry-join=consul-2.consul.$(NAMESPACE).svc.cluster.local"
+          - "-encrypt=$(GOSSIP_ENCRYPTION_KEY)"
+          - "-domain=cluster.local"
+          - "-datacenter=dc1"
+          - "-disable-host-node-id"
+          - "-node=vault-1"
+        volumeMounts:
+            - name: consul-config
+              mountPath: /consul/myconfig
+            - name: consul-tls
+              mountPath: /etc/tls
+      volumes:
+        - name: vault-config
+          configMap:
+            name: vault-conf
+        - name: consul-config
+          configMap:
+            name: consul-conf
+        - name: consul-tls
+          secret:
+            secretName: consul
+        - name: vault-tls
+          secret:
+            secretName: vault
+
+
+
+
+
+# apiVersion: extensions/v1beta1
+# kind: Deployment
+# metadata:
+#   name: vault
+#   namespace: vault
+#   labels:
+#     app: vault
+# spec:
+#   replicas: 1
+#   template:
+#     metadata:
+#       labels:
+#         app: vault
+#     spec:
+#       containers:
+#         - name: vault
+#           command: ["vault", "server", "-config", "/vault/config/config.json"]
+#           image: "vault"
+#           imagePullPolicy: IfNotPresent
+          env:
+            - name: TZ
+              value: "Europe/Madrid"
+#           envFrom:
+#             - configMapRef:
+#                 name: vault-conf
+#           securityContext:
+#             capabilities:
+#               add:
+#                 - IPC_LOCK
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          ports:
+            - name: vault-port
+              containerPort: 8200 
+          livenessProbe:
+            exec:
+              command: ["pidof", "vault"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5          
+          readinessProbe:
+            tcpSocket:
+              port: vault-port
+            initialDelaySeconds: 5
+            periodSeconds: 10
+#           volumeMounts:
+#             - name: vault-conf
+#               mountPath: /vault/config/config.json
+#               subPath: config.json
+#         #   - name: vault
+#         #     mountPath: /etc/tls
+#       volumes:
+#         - name: vault-conf
+#           configMap:
+#             name: vault-conf
+#             items:
+#               - key: config.json
+#                 path: config.json
+
+#       # - name: consul-vault-agent
+#       #   image: "consul:1.4.0"
+#       #   env:
+#       #     - name: GOSSIP_ENCRYPTION_KEY
+#       #       valueFrom:
+#       #         secretKeyRef:
+#       #           name: consul
+#       #           key: gossip-encryption-key
+#       #     - name: NAMESPACE
+#       #       valueFrom:
+#       #         fieldRef:
+#       #           fieldPath: metadata.namespace
+#         # args:
+#         #   - "agent"
+#         #   - "-retry-join=consul-0.consul.$(NAMESPACE).svc.cluster.local"
+#         #   - "-retry-join=consul-1.consul.$(NAMESPACE).svc.cluster.local"
+#         #   - "-retry-join=consul-2.consul.$(NAMESPACE).svc.cluster.local"
+#         #   - "-encrypt=$(GOSSIP_ENCRYPTION_KEY)"
+#         #   - "-domain=cluster.local"
+#         #   - "-datacenter=dc1"
+#         #   - "-disable-host-node-id"
+#         #   - "-node=vault-1"
+#         # volumeMounts:
+#         #     - name: config
+#         #       mountPath: /consul/myconfig
+#         #     - name: tls
+#         #       mountPath: /etc/tls
